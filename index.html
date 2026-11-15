@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>TV Remote</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TV Remote">
+<meta name="theme-color" content="#2a1f3d">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<style>
+  :root { --accent:#e5345a; --bg1:#3a2a4f; --bg2:#1c1530; --card:rgba(255,255,255,.06); --line:rgba(255,255,255,.14); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
+  html,body { margin:0; height:100%; overflow:hidden; background:linear-gradient(180deg,var(--bg1),var(--bg2)); color:#fff;
+    font-family:-apple-system,system-ui,sans-serif; touch-action:none; overscroll-behavior:none; }
+  .wrap { height:100%; display:flex; flex-direction:column; gap:14px;
+    padding:calc(env(safe-area-inset-top) + 12px) 18px calc(env(safe-area-inset-bottom) + 14px); }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .status { display:flex; align-items:center; gap:8px; font-size:14px; opacity:.9; min-width:0; }
+  .status span:last-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dot { flex:none; width:9px; height:9px; border-radius:50%; background:#888; }
+  .dot.on { background:#3ddc84; } .dot.off { background:var(--accent); }
+  .icons { display:flex; gap:10px; flex:none; }
+  .banner { display:none; background:rgba(229,52,90,.15); border:1px solid var(--accent); border-radius:16px;
+    padding:12px 14px; font-size:14px; line-height:1.35; }
+  .banner.show { display:block; }
+  .banner a { color:#fff; font-weight:700; }
+  .pad { position:relative; flex:1; min-height:200px; border:2px solid var(--accent); border-radius:28px;
+    background:var(--card); display:flex; align-items:center; justify-content:center; transition:background .1s; }
+  .pad.flash { background:rgba(229,52,90,.2); }
+  .chev { position:absolute; opacity:.3; font-size:26px; line-height:1; transition:opacity .1s; }
+  .chev.lit { opacity:1; }
+  .c-up{top:14px} .c-down{bottom:14px} .c-left{left:18px} .c-right{right:18px}
+  .hint { opacity:.35; font-size:13px; text-align:center; padding:0 40px; }
+  .row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .vol { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  button { appearance:none; border:1px solid var(--line); background:var(--card); color:#fff; border-radius:18px;
+    height:56px; font-size:15px; font-weight:600; font-family:inherit; }
+  button.pressed { background:rgba(229,52,90,.35); border-color:var(--accent); }
+  button.round { width:48px; height:48px; border-radius:16px; font-size:20px; }
+  button.power { background:var(--accent); border-color:var(--accent); }
+  .big { font-size:26px; }
+  .kb { display:flex; gap:10px; }
+  input { flex:1; min-width:0; height:52px; border-radius:16px; border:1px solid var(--line); background:var(--card);
+    color:#fff; font-size:17px; padding:0 14px; outline:none; -webkit-user-select:text; user-select:text; font-family:inherit; }
+  input:focus { border-color:var(--accent); }
+  .kb.ime input { border-color:#3ddc84; box-shadow:0 0 0 2px rgba(61,220,132,.35); }
+  .kb button { height:52px; padding:0 16px; }
+  /* Ajustes */
+  .sheet { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:flex-end; z-index:10; }
+  .sheet.show { display:flex; }
+  .sheet .box { width:100%; background:#241a36; border-radius:24px 24px 0 0; padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);
+    display:flex; flex-direction:column; gap:12px; }
+  .sheet h3 { margin:0 0 4px; }
+  .sheet label { font-size:13px; opacity:.7; }
+  .sheet small { opacity:.6; line-height:1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="status"><span id="dot" class="dot"></span><span id="st">Conectando…</span></div>
+    <div class="icons">
+      <button class="round" id="gear" aria-label="Ajustes">⚙︎</button>
+      <button class="round power" data-key="KEY_POWER" aria-label="Apagar">⏻</button>
+    </div>
+  </div>
+
+  <div id="banner" class="banner">
+    No se pudo conectar con la TV. Si la TV está encendida, probablemente hay que volver a aceptar su certificado:
+    <a id="certLink" href="#" target="_blank" rel="noopener">Autorizar certificado</a> → "Mostrar detalles" → "visitar este sitio web". Luego vuelve aquí.
+  </div>
+
+  <div id="pad" class="pad">
+    <span class="chev c-up" id="cu">︿</span>
+    <span class="chev c-down" id="cd">﹀</span>
+    <span class="chev c-left" id="cl">〈</span>
+    <span class="chev c-right" id="cr">〉</span>
+    <span class="hint">Desliza para moverte · toca para OK</span>
+  </div>
+
+  <div class="row">
+    <button data-key="KEY_RETURN">↩︎ Volver</button>
+    <button data-key="KEY_HOME">⌂ Inicio</button>
+    <button data-key="KEY_SOURCE">Fuente</button>
+    <button data-key="KEY_PLAY">⏯</button>
+  </div>
+
+  <form id="kb" class="kb" onsubmit="sendText(); return false;">
+    <input id="txt" type="text" placeholder="Escribir en la TV…" autocomplete="off" autocorrect="off" autocapitalize="off" enterkeyhint="send">
+    <button type="submit">Enviar</button>
+  </form>
+
+  <div class="vol">
+    <button class="big" data-key="KEY_VOLDOWN" data-repeat="1">−</button>
+    <button data-key="KEY_MUTE">🔇</button>
+    <button class="big" data-key="KEY_VOLUP" data-repeat="1">+</button>
+  </div>
+</div>
+
+<div id="sheet" class="sheet">
+  <div class="box">
+    <h3>Ajustes</h3>
+    <label for="ipInput">IP de la TV</label>
+    <input id="ipInput" type="text" inputmode="decimal" placeholder="192.168.1.19">
+    <small>La encuentras en la TV: Configuración → General → Red → Estado de la red.</small>
+    <button id="saveIp">Guardar y reconectar</button>
+    <button id="resetToken">Olvidar autorización (pedirá permiso en la TV)</button>
+    <button id="closeSheet">Cerrar</button>
+  </div>
+</div>
+
+<script>
+const LS = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+const APP_NAME = 'iPhone Atajos';
+let TV_IP = LS.get('tv_ip', '192.168.1.19');
+let ws = null, ready = false, retryTimer = null, failures = 0;
+
+const $ = (id) => document.getElementById(id);
+const dot = $('dot'), st = $('st'), banner = $('banner'), kb = $('kb'), txt = $('txt');
+
+function setStatus(text, cls) { st.textContent = text; dot.className = 'dot ' + (cls || ''); }
+function certUrl() { return `https://${TV_IP}:8002/api/v2/`; }
+$('certLink').href = certUrl();
+
+function connect() {
+  clearTimeout(retryTimer);
+  if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
+  ready = false;
+  setStatus('Conectando…');
+  const token = LS.get('tv_token', '');
+  let url = `wss://${TV_IP}:8002/api/v2/channels/samsung.remote.control?name=${btoa(APP_NAME)}`;
+  if (token) url += `&token=${encodeURIComponent(token)}`;
+  try { ws = new WebSocket(url); } catch (e) { onFail(); return; }
+
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.event === 'ms.channel.connect') {
+      ready = true; failures = 0; banner.classList.remove('show');
+      const t = m.data && m.data.token;
+      if (t) LS.set('tv_token', String(t));
+      setStatus('Conectado', 'on');
+    } else if (m.event === 'ms.channel.unauthorized') {
+      ready = false; setStatus('La TV rechazó la conexión', 'off');
+    } else if (m.event === 'ms.channel.timeOut') {
+      setStatus('Acepta el aviso en la TV…', 'off');
+    } else if (m.event === 'ms.remote.imeStart') {
+      kb.classList.add('ime'); setStatus('La TV está pidiendo texto', 'on');
+    } else if (m.event === 'ms.remote.imeEnd') {
+      kb.classList.remove('ime'); setStatus('Conectado', 'on');
+    }
+  };
+  ws.onclose = () => { onFail(); };
+}
+
+function onFail() {
+  const wasReady = ready;
+  ready = false;
+  failures = wasReady ? 0 : failures + 1;
+  setStatus('Sin conexión · reintentando', 'off');
+  if (failures >= 2) banner.classList.add('show');
+  if (document.visibilityState === 'visible') retryTimer = setTimeout(connect, Math.min(2000 * (failures || 1), 8000));
+}
+
+function sendRaw(params) {
+  if (!ws || !ready) return false;
+  ws.send(JSON.stringify({ method: 'ms.remote.control', params }));
+  return true;
+}
+function send(key) {
+  sendRaw({ Cmd: 'Click', DataOfCmd: key, Option: 'false', TypeOfRemote: 'SendRemoteKey' });
+}
+
+// iOS cierra la conexión al salir de la app: reconectar al volver
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && (!ws || ws.readyState !== 1 || !ready)) { failures = 0; connect(); }
+});
+window.addEventListener('pageshow', (e) => { if (e.persisted) connect(); });
+
+// ----- Texto -----
+function sendText() {
+  const text = txt.value;
+  if (!text) return;
+  const b64 = btoa(unescape(encodeURIComponent(text)));
+  if (sendRaw({ Cmd: b64, DataOfCmd: 'base64', TypeOfRemote: 'SendInputString' })) {
+    setTimeout(() => sendRaw({ Cmd: '', DataOfCmd: '', Option: 'false', TypeOfRemote: 'SendInputEnd' }), 200);
+    txt.value = ''; txt.blur();
+  }
+}
+
+// ----- Panel táctil -----
+const pad = $('pad');
+const STEP = 45;
+let sx = 0, sy = 0, ox = 0, oy = 0, t0 = 0, moved = false;
+const chev = { KEY_UP: 'cu', KEY_DOWN: 'cd', KEY_LEFT: 'cl', KEY_RIGHT: 'cr' };
+function light(key) { const el = $(chev[key]); el.classList.add('lit'); setTimeout(() => el.classList.remove('lit'), 150); }
+
+pad.addEventListener('touchstart', (e) => {
+  const t = e.touches[0]; sx = ox = t.clientX; sy = oy = t.clientY; t0 = Date.now(); moved = false;
+  e.preventDefault();
+}, { passive: false });
+pad.addEventListener('touchmove', (e) => {
+  const t = e.touches[0]; const dx = t.clientX - ox, dy = t.clientY - oy;
+  if (Math.abs(dx) >= STEP || Math.abs(dy) >= STEP) {
+    const key = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'KEY_RIGHT' : 'KEY_LEFT') : (dy > 0 ? 'KEY_DOWN' : 'KEY_UP');
+    send(key); light(key); moved = true; ox = t.clientX; oy = t.clientY;
+  }
+  e.preventDefault();
+}, { passive: false });
+pad.addEventListener('touchend', (e) => {
+  const t = e.changedTouches[0];
+  if (!moved && Math.hypot(t.clientX - sx, t.clientY - sy) < 15 && Date.now() - t0 < 400) {
+    send('KEY_ENTER'); pad.classList.add('flash'); setTimeout(() => pad.classList.remove('flash'), 120);
+  }
+  e.preventDefault();
+}, { passive: false });
+
+// ----- Botones -----
+document.querySelectorAll('button[data-key]').forEach((b) => {
+  let hold = null, rep = null;
+  const stop = () => { clearTimeout(hold); clearInterval(rep); b.classList.remove('pressed'); };
+  b.addEventListener('touchstart', (e) => {
+    e.preventDefault(); b.classList.add('pressed'); send(b.dataset.key);
+    if (b.dataset.repeat) hold = setTimeout(() => { rep = setInterval(() => send(b.dataset.key), 150); }, 400);
+  }, { passive: false });
+  b.addEventListener('touchend', stop); b.addEventListener('touchcancel', stop);
+});
+
+// ----- Ajustes -----
+const sheet = $('sheet'), ipInput = $('ipInput');
+$('gear').addEventListener('click', () => { ipInput.value = TV_IP; sheet.classList.add('show'); });
+$('closeSheet').addEventListener('click', () => sheet.classList.remove('show'));
+$('saveIp').addEventListener('click', () => {
+  const v = ipInput.value.trim();
+  if (v) { TV_IP = v; LS.set('tv_ip', v); $('certLink').href = certUrl(); }
+  sheet.classList.remove('show'); failures = 0; connect();
+});
+$('resetToken').addEventListener('click', () => {
+  LS.del('tv_token'); sheet.classList.remove('show'); failures = 0; connect();
+});
+
+connect();
+</script>
+</body>
+</html>
